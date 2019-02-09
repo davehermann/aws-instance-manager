@@ -4,6 +4,8 @@ const aws = require(`aws-sdk`),
     { Info, InitializeLogging, Warn, Err } = require(`multi-level-logger`),
     { AvailableInstances } = require(`./launchTemplates`);
 
+let _useCredentialProfile = undefined;
+
 function selectConfiguration() {
     let instanceNames = [];
     for (let name in AvailableInstances)
@@ -133,8 +135,21 @@ function menu() {
         },
     ];
 
+    if (_useCredentialProfile === undefined)
+        questions.unshift({
+            name: `profileName`,
+            message: `Profile name for credentials:`,
+        });
+
     return inquirer.prompt(questions)
         .then(answers => {
+            if (!!answers.profileName !== undefined) {
+                if (answers.profileName.trim().length > 0)
+                    aws.config.credentials = new aws.SharedIniFileCredentials({ profile: answers.profileName });
+
+                _useCredentialProfile = answers.profileName;
+            }
+
             switch (answers.selection) {
                 case `exit`:
                     process.exit();
@@ -154,7 +169,6 @@ function menu() {
 }
 
 InitializeLogging(`info`);
-aws.config.credentials = new aws.SharedIniFileCredentials({ profile: `other_profile` });
 
 menu()
     .catch(err => {
