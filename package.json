@@ -8,5 +8,13 @@
   },
   "author": "",
   "license": "MIT",
-  "private": true
+  "private": true,
+  "dependencies": {
+    "aws-sdk": "^2.400.0",
+    "inquirer": "^6.2.2",
+    "luxon": "^1.11.1"
+  },
+  "devDependencies": {
+    "eslint": "^5.13.0"
+  }
 }
