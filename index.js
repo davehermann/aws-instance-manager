@@ -61,48 +61,61 @@ function launchSpot() {
 function getAllInstances() {
     let ec2 = new aws.EC2({ apiVersion: `2016-11-05`, region: `us-east-1` });
 
-    return ec2.describeInstances().promise();
+    return ec2.describeInstances().promise()
+        // Flatten the list
+        .then(data => {
+            let instanceList = [];
+            data.Reservations.forEach(reservation => {
+                instanceList = instanceList.concat(reservation.Instances);
+            });
+
+            return instanceList;
+        });
+}
+
+function instanceSummary() {
+    return getAllInstances()
+        .then(instances => {
+            return instances.map(instance => {
+                let name = instance.InstanceId;
+
+                if (!!instance.Tags) {
+                    let nameTags = instance.Tags.filter(tag => { return tag.Key == `Name`; });
+                    if (nameTags.length > 0)
+                        name = `${nameTags[0].Value} (${instance.InstanceId})`;
+                }
+
+                return { name, id: instance.InstanceId, data: instance };
+            });
+        });
 }
 
 function listInstances() {
-    return getAllInstances()
-        .then(data => {
-            Info(data.Reservations.map(res => {
-                return res.Instances.map(instance => {
-                    return {
-                        ImageId: instance.ImageId,
-                        InstanceId: instance.InstanceId,
-                        InstanceType: instance.InstanceType,
-                        LaunchTime: instance.LaunchTime,
-                        IP: instance.PublicIpAddress,
-                        DNS: instance.PublicDnsName,
-                        State: instance.State,
-                        Tags: instance.Tags,
-                    };
+    return instanceSummary()
+        .then(instances => {
+            let questions = [
+                {
+                    type: `list`,
+                    name: `instanceDetail`,
+                    message: `Select an instance for more details`,
+                    choices: instances.map(instance => { return { name: instance.name, value: instance.id, short: instance.id }; }).concat([{ name: `Return to Main Menu`, value: null }]),
+                },
+            ];
+
+            return inquirer.prompt(questions)
+                .then(answers => {
+                    if (!!answers.instanceDetail)
+                        Info(instances.find(instance => { return instance.id == answers.instanceDetail; }));
                 });
-            }));
         });
 }
 
 function terminateInstance() {
-    return getAllInstances()
-        .then(data => {
-            let choices = [];
-            data.Reservations.forEach(reservation => {
-                reservation.Instances.forEach(instance => {
-                    if (instance.State.Code == 16) {
-                        let name = instance.InstanceId;
-
-                        if (!!instance.Tags) {
-                            let nameTags = instance.Tags.filter(tag => { return tag.Key == `Name`; });
-                            if (nameTags.length > 0)
-                                name = `${nameTags[0].Value} (${instance.InstanceId})`;
-                        }
-
-                        choices.push({ name, value: instance.InstanceId, short: instance.InstanceId, });
-                    }
-                });
-            });
+    return instanceSummary()
+        .then(instances => {
+            let choices = instances
+                .filter(instance => { return instance.data.State.code == 16; })
+                .map(instance => { return { name: instance.name, value: instance.id, short: instance.id }; });
 
             if (choices.length == 0) {
                 Warn(`No running instances to terminate`);
