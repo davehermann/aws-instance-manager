@@ -12,7 +12,8 @@
   "dependencies": {
     "aws-sdk": "^2.400.0",
     "inquirer": "^6.2.2",
-    "luxon": "^1.11.1"
+    "luxon": "^1.11.1",
+    "multi-level-logger": "^1.0.0"
   },
   "devDependencies": {
     "eslint": "^5.13.0"
