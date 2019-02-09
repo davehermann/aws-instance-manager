@@ -1,7 +1,7 @@
 const aws = require(`aws-sdk`),
     inquirer = require(`inquirer`),
     { DateTime } = require(`luxon`),
-    { Info, InitializeLogging } = require(`multi-level-logger`),
+    { Info, InitializeLogging, Warn, Err } = require(`multi-level-logger`),
     { AvailableInstances } = require(`./launchTemplates`);
 
 function selectConfiguration() {
@@ -42,7 +42,7 @@ function submitRequest(answers) {
         launchInstance.ValidUntil = DateTime.local().plus({ hours: answers.maximumLifetime }).toSeconds();
 
     if (answers.showRequest)
-        console.log(JSON.stringify(launchInstance, null, 4));
+        Info(launchInstance);
 
     return ec2.requestSpotInstances(launchInstance).promise();
 }
@@ -51,15 +51,19 @@ function launchSpot() {
     return selectConfiguration()
         .then(answers => submitRequest(answers))
         .then(data => {
-            console.log(`Request initiated`);
-            console.log(data);
+            Warn(`Request initiated`);
+            Info(data);
         });
 }
 
-function listInstances() {
+function getAllInstances() {
     let ec2 = new aws.EC2({ apiVersion: `2016-11-05`, region: `us-east-1` });
 
-    return ec2.describeInstances().promise()
+    return ec2.describeInstances().promise();
+}
+
+function listInstances() {
+    return getAllInstances()
         .then(data => {
             Info(data.Reservations.map(res => {
                 return res.Instances.map(instance => {
@@ -78,14 +82,52 @@ function listInstances() {
         });
 }
 
+function terminateInstance() {
+    return getAllInstances()
+        .then(data => {
+            let choices = [];
+            data.Reservations.forEach(reservation => {
+                reservation.Instances.forEach(instance => {
+                    if (instance.State.Code == 16) {
+                        let name = instance.InstanceId;
+
+                        if (!!instance.Tags) {
+                            let nameTags = instance.Tags.filter(tag => { return tag.Key == `Name`; });
+                            if (nameTags.length > 0)
+                                name = `${nameTags[0].Value} (${instance.InstanceId})`;
+                        }
+
+                        choices.push({ name, value: instance.InstanceId, short: instance.InstanceId, });
+                    }
+                });
+            });
+
+            if (choices.length == 0) {
+                Warn(`No running instances to terminate`);
+                return Promise.resolve();
+            } else {
+                let questions = [
+                    {
+                        name: `terminateId`,
+                        message: `Select instance to terminate:`,
+                        choices,
+                    },
+                ];
+                return inquirer.prompt(questions);
+            }
+        });
+}
+
 function menu() {
     let questions = [
         {
             type: `list`,
             name: `selection`,
+            message: `Main Menu`,
             choices: [
                 { name: `List Instances`, value: `instanceList` },
                 { name: `Launch Spot Instance`, value: `launchSpot` },
+                { name: `Terminate Instances`, value: `terminate` },
                 { name: `Exit`, value: `exit` },
             ],
         },
@@ -103,6 +145,9 @@ function menu() {
 
                 case `launchSpot`:
                     return launchSpot();
+
+                case `terminate`:
+                    return terminateInstance();
             }
         })
         .then(() => menu());
@@ -113,5 +158,5 @@ aws.config.credentials = new aws.SharedIniFileCredentials({ profile: `other_prof
 
 menu()
     .catch(err => {
-        console.error(err);
+        Err(err);
     });
