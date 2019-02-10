@@ -40,7 +40,7 @@ function terminateInstance() {
         })
         .then(answers => {
             if (!!answers) {
-                let ec2 = new aws.EC2({ apiVersion: `2016-11-05`, region: `us-east-1` });
+                let ec2 = new aws.EC2({ apiVersion: `2016-11-05`, });
 
                 return ec2.terminateInstances({ InstanceIds: [answers.terminateId] }).promise();
             }

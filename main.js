@@ -1,3 +1,7 @@
+// Node Modules
+const fs = require(`fs`),
+    path = require(`path`);
+
 // NPM Modules
 const aws = require(`aws-sdk`),
     inquirer = require(`inquirer`),
@@ -9,9 +13,30 @@ const { ListInstances } = require(`./instances/list`),
     { TagInstance } = require(`./instances/tag`),
     { TerminateInstance } = require(`./instances/terminate`);
 
-let _useCredentialProfile = undefined;
+let _useCredentialProfile = undefined,
+    _defaultRegion = undefined;
 
-function menu() {
+/**
+ * Attempt to load configuration defaults, if they exist
+ */
+function loadDefaults() {
+    let defaultFile = path.join(__dirname, `awsDefaults.json`);
+    return new Promise(resolve => {
+        fs.readFile(defaultFile, { encoding: `utf8` }, (err, contents) => {
+            // Ignore any error, and proceed as if no defaults exist
+            if (!!err)
+                resolve();
+            else
+                resolve(JSON.parse(contents));
+        });
+    })
+        // Ignore any error, and proceed as if no defaults exist
+        .catch(err => {
+            return null;
+        });
+}
+
+function menu(configurationDefaults) {
     let questions = [
         {
             type: `list`,
@@ -27,10 +52,18 @@ function menu() {
         },
     ];
 
+    if (_defaultRegion === undefined)
+        questions.unshift({
+            name: `awsRegion`,
+            message: `AWS Region:`,
+            default: !!configurationDefaults ? configurationDefaults.region : null,
+        });
+
     if (_useCredentialProfile === undefined)
         questions.unshift({
             name: `profileName`,
             message: `Profile name for credentials:`,
+            default: !!configurationDefaults ? configurationDefaults.profile : null,
         });
 
     return inquirer.prompt(questions)
@@ -40,6 +73,13 @@ function menu() {
                     aws.config.credentials = new aws.SharedIniFileCredentials({ profile: answers.profileName });
 
                 _useCredentialProfile = answers.profileName;
+            }
+
+            if (answers.awsRegion !== undefined) {
+                if (answers.awsRegion.trim().length > 0)
+                    aws.config.update({ region: answers.awsRegion.trim() });
+
+                _defaultRegion = answers.awsRegion;
             }
 
             switch (answers.selection) {
@@ -65,7 +105,8 @@ function menu() {
 
 InitializeLogging(`info`);
 
-menu()
+loadDefaults()
+    .then(configurationDefaults => menu(configurationDefaults))
     .catch(err => {
         Err(err);
     });

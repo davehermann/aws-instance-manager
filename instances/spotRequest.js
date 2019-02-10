@@ -25,8 +25,8 @@ function selectConfiguration() {
         },
         {
             name: `maximumLifetime`,
-            message: `How many hours should this instance operate:`,
-            default: 4,
+            message: `How many hours should this request be active:`,
+            default: 1,
             when: answers => {
                 return !!answers.selectedInstance;
             },
@@ -52,7 +52,7 @@ function submitRequest(answers) {
     if (answers.selectedInstance == null)
         return Promise.resolve();
 
-    let ec2 = new aws.EC2({ apiVersion: `2016-11-05`, region: `us-east-1` });
+    let ec2 = new aws.EC2({ apiVersion: `2016-11-05`, });
 
     // Copy the instance configuration
     let launchInstance = JSON.parse(JSON.stringify(AvailableInstances[answers.selectedInstance]));
