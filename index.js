@@ -40,8 +40,10 @@ function submitRequest(answers) {
     let launchInstance = JSON.parse(JSON.stringify(AvailableInstances[answers.selectedInstance]));
 
     // Add an expiration the requested hours in the future (2020-02-09T13:34:20Z)
-    if (answers.maximumLifetime > 0)
-        launchInstance.ValidUntil = DateTime.local().plus({ hours: answers.maximumLifetime }).toSeconds();
+    if (answers.maximumLifetime > 0) {
+        const expirationTime = DateTime.utc().plus({ hours: +answers.maximumLifetime });
+        launchInstance.ValidUntil = expirationTime.toISO(); //`${expirationTime.toFormat(`yyyy-LL-dd`)}T${expirationTime.toFormat(`TT`)}Z`;
+    }
 
     if (answers.showRequest)
         Info(launchInstance);
@@ -98,7 +100,9 @@ function listInstances() {
                     type: `list`,
                     name: `instanceDetail`,
                     message: `Select an instance for more details`,
-                    choices: instances.map(instance => { return { name: instance.name, value: instance.id, short: instance.id }; }).concat([{ name: `Return to Main Menu`, value: null }]),
+                    choices: instances
+                        .map(instance => { return { name: `${instance.name} - ${instance.data.State.Name}[${instance.data.State.Code}]`, value: instance.id, short: instance.id }; })
+                        .concat([{ name: `Return to Main Menu`, value: null }]),
                 },
             ];
 
@@ -110,25 +114,101 @@ function listInstances() {
         });
 }
 
+function tagInstance() {
+    return instanceSummary()
+        .then(instances => {
+            let choices = instances
+                .filter(instance => { return instance.data.State.Code == 16; })
+                .map(instance => { return { name: instance.name, value: instance.id, short: instance.id }; });
+
+            if (choices.length == 0) {
+                Warn(`No running instances found`);
+                return Promise.resolve();
+            } else {
+                choices = choices
+                    .concat([{ name: `Return to Main Menu`, value: null }]);
+
+                let questions = [
+                    {
+                        type: `list`,
+                        name: `tagId`,
+                        message: `Select instance to tag:`,
+                        choices,
+                    },
+                    {
+                        name: `tagKey`,
+                        message: `What key will be used for the tag?`,
+                        default: `Name`,
+                        when: (answers) => {
+                            return !!answers.tagId;
+                        },
+                    },
+                    {
+                        name: `tagValue`,
+                        message: (answers) => { return `What is the value of "${answers.tagKey}"?`; },
+                        when: (answers) => {
+                            return !!answers.tagKey;
+                        },
+                    },
+                ];
+
+                return inquirer.prompt(questions)
+                    .then(answers => {
+                        return !!answers.tagValue ? answers : null;
+                    });
+            }
+
+        })
+        .then(answers => {
+            if (!!answers) {
+                let ec2 = new aws.EC2({ apiVersion: `2016-11-05`, region: `us-east-1` }),
+                    taggingParams = {
+                        Resources: [answers.tagId],
+                        Tags: [
+                            { Key: answers.tagKey, Value: answers.tagValue },
+                        ],
+                    };
+
+                return ec2.createTags(taggingParams).promise();
+            }
+
+            return Promise.resolve();
+        });
+}
+
 function terminateInstance() {
     return instanceSummary()
         .then(instances => {
             let choices = instances
-                .filter(instance => { return instance.data.State.code == 16; })
+                .filter(instance => { return instance.data.State.Code == 16; })
                 .map(instance => { return { name: instance.name, value: instance.id, short: instance.id }; });
 
             if (choices.length == 0) {
                 Warn(`No running instances to terminate`);
                 return Promise.resolve();
             } else {
+                choices = choices
+                    .concat([{ name: `Return to Main Menu`, value: null }]);
+
                 let questions = [
                     {
+                        type: `list`,
                         name: `terminateId`,
                         message: `Select instance to terminate:`,
                         choices,
                     },
                 ];
-                return inquirer.prompt(questions);
+                return inquirer.prompt(questions)
+                    .then(answers => {
+                        return !!answers.terminateId ? answers : null;
+                    });
+            }
+        })
+        .then(answers => {
+            if (!!answers) {
+                let ec2 = new aws.EC2({ apiVersion: `2016-11-05`, region: `us-east-1` });
+
+                return ec2.terminateInstances({ InstanceIds: [answers.terminateId] }).promise();
             }
         });
 }
@@ -141,6 +221,7 @@ function menu() {
             message: `Main Menu`,
             choices: [
                 { name: `List Instances`, value: `instanceList` },
+                { name: `Tag Running Instance`, value: `tagInstance` },
                 { name: `Launch Spot Instance`, value: `launchSpot` },
                 { name: `Terminate Instances`, value: `terminate` },
                 { name: `Exit`, value: `exit` },
@@ -156,7 +237,7 @@ function menu() {
 
     return inquirer.prompt(questions)
         .then(answers => {
-            if (!!answers.profileName !== undefined) {
+            if (answers.profileName !== undefined) {
                 if (answers.profileName.trim().length > 0)
                     aws.config.credentials = new aws.SharedIniFileCredentials({ profile: answers.profileName });
 
@@ -173,6 +254,9 @@ function menu() {
 
                 case `launchSpot`:
                     return launchSpot();
+
+                case `tagInstance`:
+                    return tagInstance();
 
                 case `terminate`:
                     return terminateInstance();
