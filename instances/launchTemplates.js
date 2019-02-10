@@ -1,4 +1,4 @@
-const configuredInstances = require(`./myInstances.json`);
+const configuredInstances = require(`../myInstances.json`);
 
 function AvailableInstances() {
     let instances = {};
