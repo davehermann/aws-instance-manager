@@ -148,7 +148,7 @@ function tagInstance() {
                 .filter(instance => { return instance.data.State.Code == 16; })
                 .map(instance => { return { name: instance.name, value: instance.id, short: instance.id }; });
 
-            return emptyList(choices.length);
+            return emptyList(choices);
         })
         .then(choices => {
             if (!!choices) {
