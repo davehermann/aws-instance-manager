@@ -6,6 +6,14 @@ const aws = require(`aws-sdk`),
 
 let _useCredentialProfile = undefined;
 
+function emptyList(itemList, message) {
+    if (itemList == 0) {
+        Warn(message || `No running instances found`);
+        return Promise.resolve();
+    } else
+        return Promise.resolve(itemList);
+}
+
 function selectConfiguration() {
     let instanceNames = [];
     for (let name in AvailableInstances)
@@ -95,22 +103,28 @@ function instanceSummary() {
 function listInstances() {
     return instanceSummary()
         .then(instances => {
-            let questions = [
-                {
-                    type: `list`,
-                    name: `instanceDetail`,
-                    message: `Select an instance for more details`,
-                    choices: instances
-                        .map(instance => { return { name: `${instance.name} - ${instance.data.State.Name}[${instance.data.State.Code}]`, value: instance.id, short: instance.id }; })
-                        .concat([{ name: `Return to Main Menu`, value: null }]),
-                },
-            ];
-
-            return inquirer.prompt(questions)
-                .then(answers => {
-                    if (!!answers.instanceDetail)
-                        Info(instances.find(instance => { return instance.id == answers.instanceDetail; }));
-                });
+            return emptyList(instances, `No instances found`);
+        })
+        .then(instances => {
+            if (!!instances) {
+                let questions = [
+                    {
+                        type: `list`,
+                        name: `instanceDetail`,
+                        message: `Select an instance for more details`,
+                        choices: instances
+                            .map(instance => { return { name: `${instance.name} - ${instance.data.State.Name}[${instance.data.State.Code}]`, value: instance.id, short: instance.id }; })
+                            .concat([{ name: `Return to Main Menu`, value: null }]),
+                    },
+                ];
+    
+                return inquirer.prompt(questions)
+                    .then(answers => {
+                        if (!!answers.instanceDetail)
+                            Info(instances.find(instance => { return instance.id == answers.instanceDetail; }));
+                    });
+            }
+            return Promise.resolve();
         });
 }
 
@@ -121,10 +135,10 @@ function tagInstance() {
                 .filter(instance => { return instance.data.State.Code == 16; })
                 .map(instance => { return { name: instance.name, value: instance.id, short: instance.id }; });
 
-            if (choices.length == 0) {
-                Warn(`No running instances found`);
-                return Promise.resolve();
-            } else {
+            return emptyList(choices.length);
+        })
+        .then(choices => {
+            if (!!choices) {
                 choices = choices
                     .concat([{ name: `Return to Main Menu`, value: null }]);
 
@@ -158,6 +172,7 @@ function tagInstance() {
                     });
             }
 
+            return Promise.resolve();
         })
         .then(answers => {
             if (!!answers) {
@@ -183,10 +198,10 @@ function terminateInstance() {
                 .filter(instance => { return instance.data.State.Code == 16; })
                 .map(instance => { return { name: instance.name, value: instance.id, short: instance.id }; });
 
-            if (choices.length == 0) {
-                Warn(`No running instances to terminate`);
-                return Promise.resolve();
-            } else {
+            return emptyList(choices);
+        })
+        .then(choices => {
+            if (!!choices) {
                 choices = choices
                     .concat([{ name: `Return to Main Menu`, value: null }]);
 
@@ -203,6 +218,8 @@ function terminateInstance() {
                         return !!answers.terminateId ? answers : null;
                     });
             }
+
+            return Promise.resolve();
         })
         .then(answers => {
             if (!!answers) {
