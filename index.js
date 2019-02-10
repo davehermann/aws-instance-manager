@@ -19,6 +19,8 @@ function selectConfiguration() {
     for (let name in AvailableInstances)
         instanceNames.push(name);
 
+    instanceNames.push({ name: `Return to Main Menu`, value: null });
+
     const questions = [
         {
             type: `list`,
@@ -30,11 +32,17 @@ function selectConfiguration() {
             name: `maximumLifetime`,
             message: `How many hours should this instance operate:`,
             default: 4,
+            when: answers => {
+                return !!answers.selectedInstance;
+            },
         },
         {
             type: `confirm`,
             name: `showRequest`,
             message: `Show the request data?`,
+            when: answers => {
+                return !!answers.selectedInstance;
+            },
         }
     ];
 
@@ -42,6 +50,9 @@ function selectConfiguration() {
 }
 
 function submitRequest(answers) {
+    if (answers.selectedInstance == null)
+        return Promise.resolve();
+
     let ec2 = new aws.EC2({ apiVersion: `2016-11-05`, region: `us-east-1` });
 
     // Copy the instance configuration
@@ -63,8 +74,10 @@ function launchSpot() {
     return selectConfiguration()
         .then(answers => submitRequest(answers))
         .then(data => {
-            Warn(`Request initiated`);
-            Info(data);
+            if (!!data) {
+                Warn(`Request initiated`);
+                Info(data);
+            }
         });
 }
 
