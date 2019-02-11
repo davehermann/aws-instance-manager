@@ -37,6 +37,9 @@ function loadDefaults() {
         });
 }
 
+/**
+ * Update the awsDefaults.json file after any changes
+ */
 function updateDefaults() {
     return new Promise((resolve, reject) => {
         fs.writeFile(_defaultFile, JSON.stringify({ profile: _useCredentialProfile, region: _defaultRegion }, null, 4), (err) => {
@@ -48,6 +51,10 @@ function updateDefaults() {
     });
 }
 
+/**
+ * Render the main menu
+ * @param {Object} configurationDefaults - loaded awsDefaults.json
+ */
 function menu(configurationDefaults) {
     let questions = [
         {
