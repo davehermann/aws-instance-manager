@@ -13,6 +13,7 @@ const { ListInstances } = require(`./instances/list`),
     { TagInstance } = require(`./instances/tag`),
     { TerminateInstance } = require(`./instances/terminate`);
 
+const _defaultFile = path.join(__dirname, `awsDefaults.json`);
 let _useCredentialProfile = undefined,
     _defaultRegion = undefined;
 
@@ -20,9 +21,8 @@ let _useCredentialProfile = undefined,
  * Attempt to load configuration defaults, if they exist
  */
 function loadDefaults() {
-    let defaultFile = path.join(__dirname, `awsDefaults.json`);
     return new Promise(resolve => {
-        fs.readFile(defaultFile, { encoding: `utf8` }, (err, contents) => {
+        fs.readFile(_defaultFile, { encoding: `utf8` }, (err, contents) => {
             // Ignore any error, and proceed as if no defaults exist
             if (!!err)
                 resolve();
@@ -31,9 +31,21 @@ function loadDefaults() {
         });
     })
         // Ignore any error, and proceed as if no defaults exist
+        // eslint-disable-next-line no-unused-vars
         .catch(err => {
             return null;
         });
+}
+
+function updateDefaults() {
+    return new Promise((resolve, reject) => {
+        fs.writeFile(_defaultFile, JSON.stringify({ profile: _useCredentialProfile, region: _defaultRegion }, null, 4), (err) => {
+            if (!!err)
+                reject(err);
+            else
+                resolve();
+        });
+    });
 }
 
 function menu(configurationDefaults) {
@@ -82,23 +94,31 @@ function menu(configurationDefaults) {
                 _defaultRegion = answers.awsRegion;
             }
 
-            switch (answers.selection) {
-                case `exit`:
-                    process.exit();
-                    break;
+            // If the configurationDefaults have been updated, write the updated values
+            let pUpdate = Promise.resolve();
+            if (!configurationDefaults || (_defaultRegion !== configurationDefaults.region) || (_useCredentialProfile !== configurationDefaults.profile))
+                pUpdate = pUpdate.then(() => updateDefaults());
 
-                case `instanceList`:
-                    return ListInstances();
-
-                case `launchSpot`:
-                    return NewSpotRequest();
-
-                case `tagInstance`:
-                    return TagInstance();
-
-                case `terminate`:
-                    return TerminateInstance();
-            }
+            return pUpdate
+                .then(() => {
+                    switch (answers.selection) {
+                        case `exit`:
+                            process.exit();
+                            break;
+        
+                        case `instanceList`:
+                            return ListInstances();
+        
+                        case `launchSpot`:
+                            return NewSpotRequest();
+        
+                        case `tagInstance`:
+                            return TagInstance();
+        
+                        case `terminate`:
+                            return TerminateInstance();
+                    }
+                });
         })
         .then(() => menu());
 }
