@@ -1,9 +1,35 @@
 // NPM Modules
 const inquirer = require(`inquirer`),
+    { DateTime } = require(`luxon`),
     { Info } = require(`multi-level-logger`);
 
 // Application Modules
 const { EmptyList, InstanceSummary } = require(`./utilities`);
+
+function basicDetails(instance) {
+    Info({
+        Name: instance.name,
+        Launched: DateTime.fromJSDate(instance.data.LaunchTime).toRelative(),
+        [`Public DNS`]: instance.data.PublicDnsName,
+    });
+}
+
+function moreDetails(instance) {
+    let questions = [
+        {
+            type: `confirm`,
+            name: `fullDetails`,
+            message: `Would you like to see the full instance data?`,
+            default: false,
+        }
+    ];
+
+    return inquirer.prompt(questions)
+        .then(answers => {
+            if (answers.fullDetails)
+                Info(instance);
+        });
+}
 
 /**
  * List all instances, and provide more detail when selected
@@ -28,8 +54,13 @@ function listInstances() {
     
                 return inquirer.prompt(questions)
                     .then(answers => {
-                        if (!!answers.instanceDetail)
-                            Info(instances.find(instance => { return instance.id == answers.instanceDetail; }));
+                        if (!!answers.instanceDetail) {
+                            const instance = instances.find(instance => { return instance.id == answers.instanceDetail; });
+                            basicDetails(instance);
+
+                            return moreDetails(instance)
+                                .then(() => listInstances());
+                        }
                     });
             }
             return Promise.resolve();
