@@ -6,6 +6,7 @@ const aws = require(`aws-sdk`),
 
 // Application Modules
 const { AvailableInstances } = require(`./launchTemplates`);
+
 /**
  * Series of options for configuring a spot request
  */
@@ -44,6 +45,40 @@ function selectConfiguration() {
     return inquirer.prompt(questions);
 }
 
+function selectImage(instanceConfiguration) {
+    const ec2 = new aws.EC2({ apiVersion: `2016-11-05` });
+
+    return ec2.describeImages({ Owners:[`self`] }).promise()
+        .then(data => {
+            let imageList = data.Images.map(ami => {
+                return {
+                    name: `${ami.Name} [${ami.Platform}] (${ami.ImageId}) - ${DateTime.fromISO(ami.CreationDate).toRelative()}`,
+                    value: JSON.parse(JSON.stringify(ami)),
+                    short: ami.ImageId,
+                };
+            });
+
+            let questions = [
+                {
+                    type: `list`,
+                    name: `ami`,
+                    message: `Select AMI from a list of your images`,
+                    choices: imageList,
+                }
+            ];
+
+            return inquirer.prompt(questions)
+                .then(answers => {
+                    instanceConfiguration.LaunchSpecification.ImageId = answers.ami.ImageId;
+                    answers.ami.BlockDeviceMappings.forEach(device => {
+                        delete device.Ebs.Encrypted;
+                    });
+                    instanceConfiguration.LaunchSpecification.BlockDeviceMappings = answers.ami.BlockDeviceMappings;
+                });
+        })
+        .then(() => { return instanceConfiguration; });
+}
+
 function selectAvailabilityZone(instanceConfiguration) {
     const hoursBack = 48,
         ec2 = new aws.EC2({ apiVersion: `2016-11-05`, }),
@@ -53,7 +88,6 @@ function selectAvailabilityZone(instanceConfiguration) {
             EndTime: DateTime.utc().toJSDate()
         };
 
-    console.log(JSON.stringify(priceHistoryParams));
     return ec2.describeSpotPriceHistory(priceHistoryParams).promise()
         .then(data => {
             // Filter by ProductDescription - ask the user
@@ -106,7 +140,7 @@ function selectAvailabilityZone(instanceConfiguration) {
                 instancePricing[zone].forEach(price => {
                     zonePrices.push(`${price.SpotPrice} (${DateTime.fromJSDate(price.Timestamp).toRelative({ unit: `hours` })})`);
                 });
-                console.log(`${zone}: ${zonePrices.join(` - `)}`);
+                Warn(`${zone}: ${zonePrices.join(` - `)}`);
             });
 
             return zones;
@@ -152,7 +186,9 @@ function submitRequest(answers) {
     // Copy the instance configuration
     let instanceConfiguration = JSON.parse(JSON.stringify(AvailableInstances[answers.selectedInstance]));
 
-    return selectAvailabilityZone(instanceConfiguration)
+    return Promise.resolve(instanceConfiguration)
+        .then(instanceConfiguration => { return (instanceConfiguration.LaunchSpecification.ImageId == `SELECT`) ? selectImage(instanceConfiguration) : instanceConfiguration; })
+        .then(instanceConfiguration => { return (instanceConfiguration.LaunchSpecification.NetworkInterfaces[0].SubnetId == `SELECT`) ? selectAvailabilityZone(instanceConfiguration) : instanceConfiguration; })
         .then(launchInstance => {
             const ec2 = new aws.EC2({ apiVersion: `2016-11-05`, });
 
@@ -161,10 +197,10 @@ function submitRequest(answers) {
                 const expirationTime = DateTime.utc().plus({ hours: +answers.maximumLifetime });
                 launchInstance.ValidUntil = expirationTime.toISO(); //`${expirationTime.toFormat(`yyyy-LL-dd`)}T${expirationTime.toFormat(`TT`)}Z`;
             }
-        
+
             if (answers.showRequest)
                 Info(launchInstance);
-        
+
             return ec2.requestSpotInstances(launchInstance).promise();
         });
 }

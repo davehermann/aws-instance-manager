@@ -9,7 +9,7 @@ const { EmptyList, InstanceSummary } = require(`./utilities`);
 function basicDetails(instance) {
     Info({
         Name: instance.name,
-        Launched: DateTime.fromJSDate(instance.data.LaunchTime).toRelative(),
+        Launched: `${DateTime.fromJSDate(instance.data.LaunchTime).toRelative()} (${DateTime.fromJSDate(instance.data.LaunchTime).toLocaleString(DateTime.DATETIME_MED_WITH_SECONDS)})`,
         [`Public DNS`]: instance.data.PublicDnsName,
     });
 }

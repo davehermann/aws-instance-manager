@@ -17,6 +17,6 @@ module.exports = {
         "no-unused-vars": ["warn"],
         "quotes": ["warn", "backtick"],
         "semi": ["error", "always"],
-        "no-console": ["off"]
+        "no-console": ["warn"]
     }
 }
