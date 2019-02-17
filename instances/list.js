@@ -48,18 +48,22 @@ function listInstances() {
                         message: `Select an instance for more details`,
                         choices: instances
                             .map(instance => { return { name: `${instance.name} - ${instance.data.State.Name}[${instance.data.State.Code}]`, value: instance.id, short: instance.id }; })
-                            .concat([{ name: `Return to Main Menu`, value: null }]),
+                            .concat([{ name: `Refresh List`, value: `refresh` }, { name: `Return to Main Menu`, value: null }]),
                     },
                 ];
     
                 return inquirer.prompt(questions)
                     .then(answers => {
                         if (!!answers.instanceDetail) {
-                            const instance = instances.find(instance => { return instance.id == answers.instanceDetail; });
-                            basicDetails(instance);
-
-                            return moreDetails(instance)
-                                .then(() => listInstances());
+                            if (answers.instanceDetail == `refresh`)
+                                return listInstances();
+                            else {
+                                const instance = instances.find(instance => { return instance.id == answers.instanceDetail; });
+                                basicDetails(instance);
+    
+                                return moreDetails(instance)
+                                    .then(() => listInstances());
+                            }
                         }
                     });
             }
