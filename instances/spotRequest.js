@@ -69,11 +69,11 @@ function selectImage(instanceConfiguration) {
 
             return inquirer.prompt(questions)
                 .then(answers => {
-                    instanceConfiguration.LaunchSpecification.ImageId = answers.ami.ImageId;
+                    instanceConfiguration.LaunchSpecifications[0].ImageId = answers.ami.ImageId;
                     answers.ami.BlockDeviceMappings.forEach(device => {
                         delete device.Ebs.Encrypted;
                     });
-                    instanceConfiguration.LaunchSpecification.BlockDeviceMappings = answers.ami.BlockDeviceMappings;
+                    instanceConfiguration.LaunchSpecifications[0].BlockDeviceMappings = answers.ami.BlockDeviceMappings;
                 });
         })
         .then(() => { return instanceConfiguration; });
@@ -83,7 +83,7 @@ function selectAvailabilityZone(instanceConfiguration) {
     const hoursBack = 48,
         ec2 = new aws.EC2({ apiVersion: `2016-11-05`, }),
         priceHistoryParams = {
-            InstanceTypes: [instanceConfiguration.LaunchSpecification.InstanceType],
+            InstanceTypes: [instanceConfiguration.LaunchSpecifications[0].InstanceType],
             StartTime: DateTime.utc().plus({ hours: -hoursBack }).toJSDate(),
             EndTime: DateTime.utc().toJSDate()
         };
@@ -168,7 +168,7 @@ function selectAvailabilityZone(instanceConfiguration) {
                 });
         })
         .then(launchSubnet => {
-            instanceConfiguration.LaunchSpecification.NetworkInterfaces[0].SubnetId = launchSubnet.SubnetId;
+            instanceConfiguration.LaunchSpecifications[0].NetworkInterfaces[0].SubnetId = launchSubnet.SubnetId;
         })
         .then(() => {
             return Promise.resolve(instanceConfiguration);
@@ -187,8 +187,8 @@ function submitRequest(answers) {
     let instanceConfiguration = JSON.parse(JSON.stringify(AvailableInstances[answers.selectedInstance]));
 
     return Promise.resolve(instanceConfiguration)
-        .then(instanceConfiguration => { return (instanceConfiguration.LaunchSpecification.ImageId == `SELECT`) ? selectImage(instanceConfiguration) : instanceConfiguration; })
-        .then(instanceConfiguration => { return (instanceConfiguration.LaunchSpecification.NetworkInterfaces[0].SubnetId == `SELECT`) ? selectAvailabilityZone(instanceConfiguration) : instanceConfiguration; })
+        .then(instanceConfiguration => { return (instanceConfiguration.LaunchSpecifications[0].ImageId == `SELECT`) ? selectImage(instanceConfiguration) : instanceConfiguration; })
+        .then(instanceConfiguration => { return (instanceConfiguration.LaunchSpecifications[0].NetworkInterfaces[0].SubnetId == `SELECT`) ? selectAvailabilityZone(instanceConfiguration) : instanceConfiguration; })
         .then(launchInstance => {
             const ec2 = new aws.EC2({ apiVersion: `2016-11-05`, });
 

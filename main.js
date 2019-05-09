@@ -135,5 +135,5 @@ InitializeLogging(`info`);
 loadDefaults()
     .then(configurationDefaults => menu(configurationDefaults))
     .catch(err => {
-        Err(err);
+        Err(err, true);
     });
